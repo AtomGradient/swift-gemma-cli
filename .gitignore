@@ -1,2 +1,3 @@
 .build/
 default.metallib
+.DS_Store
