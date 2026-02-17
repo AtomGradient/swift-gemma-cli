@@ -13,8 +13,8 @@ We compress the original 2.8 GB QAT 4-bit model to **2.1 GB** while preserving b
 | Model | Size | Description | HuggingFace |
 |-------|------|-------------|-------------|
 | Original | 2.8 GB | Baseline QAT 4-bit | [mlx-community/gemma-3-4b-it-qat-4bit](https://huggingface.co/mlx-community/gemma-3-4b-it-qat-4bit) |
-| **Lite** | 2.3 GB | Vocab pruned + vision fc2 quantized + 3 text layers removed + 672px | [AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-lite](https://huggingface.co/AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-lite) |
-| **Mobile** | 2.1 GB | All above + neuron pruning + weight splitting | [AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-mobile](https://huggingface.co/AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-mobile) |
+| **Lite** | 2.3 GB | Vocab pruned + vision fc2 quantized + 3 text layers removed + 672px | [AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-lite](https://huggingface.co/AtomGradient/gemma-3-4b-it-qat-4bit-lite) |
+| **Mobile** | 2.1 GB | All above + neuron pruning + weight splitting | [AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-mobile](https://huggingface.co/AtomGradient/gemma-3-4b-it-qat-4bit-mobile) |
 
 ### Lite (`gemma-3-4b-it-qat-4bit-lite`)
 
