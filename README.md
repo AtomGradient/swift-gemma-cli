@@ -55,9 +55,9 @@ Benchmarked on Apple Silicon. Temperature = 0.0, greedy decoding.
 
 ## Requirements
 
-- macOS 14+
-- Apple Silicon (M1/M2/M3/M4)
-- Xcode 16+ / Swift 6.0+
+- macOS 18+
+- Apple Silicon (M series or A Series), RAM Size >= 8GB
+- Xcode 18+ / Swift 5.0+
 
 ## Build
 
