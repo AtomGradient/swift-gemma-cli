@@ -13,8 +13,8 @@ We compress the original 2.8 GB QAT 4-bit model to **2.1 GB** while preserving b
 | Model | Size | Description | HuggingFace |
 |-------|------|-------------|-------------|
 | Original | 2.8 GB | Baseline QAT 4-bit | [mlx-community/gemma-3-4b-it-qat-4bit](https://huggingface.co/mlx-community/gemma-3-4b-it-qat-4bit) |
-| **Lite** | 2.3 GB | Vocab pruned + vision fc2 quantized + 3 text layers removed + 672px | [AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-lite](https://huggingface.co/AtomGradient/gemma-3-4b-it-qat-4bit-lite) |
-| **Mobile** | 2.1 GB | All above + neuron pruning + weight splitting | [AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-mobile](https://huggingface.co/AtomGradient/gemma-3-4b-it-qat-4bit-mobile) |
+| **Lite** | 2.3 GB | Vocab pruned + vision fc2 quantized + 3 text layers removed + 672px | [AtomGradient/gemma-3-4b-it-qat-4bit-lite](https://huggingface.co/AtomGradient/gemma-3-4b-it-qat-4bit-lite) |
+| **Mobile** | 2.1 GB | All above + neuron pruning + weight splitting | [AtomGradient/gemma-3-4b-it-qat-4bit-mobile](https://huggingface.co/AtomGradient/gemma-3-4b-it-qat-4bit-mobile) |
 
 ### Lite (`gemma-3-4b-it-qat-4bit-lite`)
 
@@ -124,10 +124,10 @@ gemma-cli <model-path> [--image <path>] [--prompt <text>] [--max-tokens N] [--te
 pip install huggingface_hub
 
 # Download Lite model (2.3 GB, single file)
-huggingface-cli download AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-lite --local-dir models/lite
+huggingface-cli download AtomGradient/gemma-3-4b-it-qat-4bit-lite --local-dir models/lite
 
 # Download Mobile model (2.1 GB, split weights)
-huggingface-cli download AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-mobile --local-dir models/mobile
+huggingface-cli download AtomGradient/gemma-3-4b-it-qat-4bit-mobile --local-dir models/mobile
 ```
 
 ### Examples
