@@ -1,22 +1,100 @@
-# gemma-cli
+# Gemma-Prune
 
-A Swift CLI tool for running **Gemma 3 4B IT VLM** inference on Apple Silicon with [MLX](https://github.com/ml-explore/mlx-swift).
+A multi-stage compression pipeline and Swift CLI for deploying **Gemma 3 4B IT VLM** on Apple Silicon edge devices with [MLX](https://github.com/ml-explore/mlx-swift).
 
-Supports both text-only and multimodal (text + image) inference with streaming output and performance statistics.
+We compress the original 2.8 GB QAT 4-bit model to **2.1 GB** while preserving both text generation and image understanding — achieving **22% faster generation**, **3.4x faster image processing**, and **23% lower memory**.
+
+> **Paper**: [Gemma-Prune: A Multi-Stage Compression Pipeline for Deploying Gemma 3 4B VLM on Mobile Devices](docs/paper.tex)
+
+## Models
+
+| Model | Size | Description | HuggingFace |
+|-------|------|-------------|-------------|
+| Original | 2.8 GB | Baseline QAT 4-bit | [mlx-community/gemma-3-4b-it-qat-4bit](https://huggingface.co/mlx-community/gemma-3-4b-it-qat-4bit) |
+| **Lite** | 2.3 GB | Vocab pruned + vision fc2 quantized + 3 text layers removed + 672px | [AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-lite](https://huggingface.co/AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-lite) |
+| **Mobile** | 2.1 GB | All above + neuron pruning + weight splitting | [AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-mobile](https://huggingface.co/AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-mobile) |
+
+### Lite (`gemma-3-4b-it-qat-4bit-lite`)
+
+Good balance of compression and quality. Single-file weights, easy to deploy.
+
+- **Disk**: 2.3 GB (`model.safetensors`)
+- **Text**: 31 layers, vocab 262K (token_map → 144K compact embeddings)
+- **Vision**: 672px, 27-layer SigLIP, 144 image tokens, fc2 4-bit quantized
+
+### Mobile (`gemma-3-4b-it-qat-4bit-mobile`)
+
+Maximum compression for 8 GB mobile devices. Split weights allow text-only lazy loading.
+
+- **Disk**: 2.1 GB (`language_model.safetensors` 1.9 GB + `vision_model.safetensors` 231 MB)
+- **Text**: 31 layers, per-layer MLP sizes (layers 14-30 pruned 25% neurons)
+- **Vision**: same as Lite
+- **Text-only runtime**: ~2.2 GB (loads language model only)
+
+## Performance
+
+Benchmarked on Apple Silicon. Temperature = 0.0, greedy decoding.
+
+### Text Generation
+
+| Model | Disk | Generation (t/s) | Peak Memory |
+|-------|------|-------------------|-------------|
+| Original | 2.8 GB | 90 | 2910 MB |
+| Lite | 2.3 GB | ~110 | ~2500 MB |
+| **Mobile** | **2.1 GB** | **110** | **2231 MB** |
+
+### Image Understanding (pizza photo, 200 tokens)
+
+| Model | Prompt (t/s) | Generation (t/s) | Peak Memory | Quality |
+|-------|-------------|-------------------|-------------|---------|
+| Original (896px) | 54 | 27 | ~5500 MB | Excellent |
+| **Mobile (672px)** | **184** | **104** | **4358 MB** | **Good** |
+| Improvement | **3.4x** | **3.9x** | **-21%** | |
 
 ## Requirements
 
 - macOS 14+
 - Apple Silicon (M1/M2/M3/M4)
-- Xcode 16+ / Swift 5.12+
-- [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) cloned at `../mlx-swift-lm`
+- Xcode 16+ / Swift 6.0+
 
 ## Build
+
+This project depends on a **customized fork** of [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) with added support for `token_map` (vocabulary pruning) and `per_layer_intermediate_sizes` (neuron pruning) in the Gemma 3 model implementation.
+
+### Step 1: Clone both repositories
+
+```bash
+# Clone this repo
+git clone https://github.com/AtomGradient/swift-gemma-cli.git gemma-cli
+
+# Clone our customized mlx-swift-lm (must be sibling directory)
+git clone https://github.com/AtomGradient/mlx-swift-lm.git mlx-swift-lm
+```
+
+The directory layout should be:
+
+```
+parent-directory/
+  gemma-cli/          # this repo
+  mlx-swift-lm/       # customized fork (sibling, referenced by Package.swift)
+```
+
+### Step 2: Build
 
 ```bash
 cd gemma-cli
 swift build -c release
 ```
+
+### What's customized in mlx-swift-lm?
+
+The only modified file is `Libraries/MLXVLM/Models/Gemma3.swift`. Changes:
+
+1. **Token map support** — Reads `vocab_pruning.compact_vocab_size` from config, initializes embedding with compact size, loads `token_map` array from weights, remaps token IDs before embedding lookup
+2. **Per-layer MLP sizes** — Reads `per_layer_intermediate_sizes` from `text_config`, initializes each transformer block's MLP with its corresponding intermediate dimension
+3. **MLXArrayBox wrapper** — Hides `token_map` from MLX Module reflection to avoid weight key mismatch during `model.update()`
+
+These changes are **backward-compatible**: models without `vocab_pruning` or `per_layer_intermediate_sizes` work identically to the original code.
 
 ## Usage
 
@@ -28,146 +106,114 @@ gemma-cli <model-path> [--image <path>] [--prompt <text>] [--max-tokens N] [--te
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `<model-path>` | (required) | Path to the local model directory |
-| `--image <path>` | (none) | Path to an image file for multimodal inference |
+| `<model-path>` | (required) | Path to local model directory |
+| `--image <path>` | (none) | Image file for multimodal inference |
 | `--prompt`, `-p` | `"Hello, how are you?"` | Prompt text |
 | `--max-tokens`, `-m` | `100` | Maximum tokens to generate |
 | `--temperature`, `-t` | `0.6` | Sampling temperature (0 = greedy) |
 | `--top-p` | `1.0` | Top-p nucleus sampling |
-| `--repetition-penalty` | (none) | Penalty factor for repeating tokens |
-| `--repetition-context-size` | `20` | Number of tokens for repetition penalty context |
+| `--repetition-penalty` | (none) | Repetition penalty factor |
+| `--repetition-context-size` | `20` | Repetition penalty context window |
 
-## Models
-
-### Original Model
-
-[gemma-3-4b-it-qat-4bit](https://huggingface.co/mlx-community/gemma-3-4b-it-qat-4bit) — The original QAT 4-bit quantized Gemma 3 4B IT model.
-
-- Disk: **2.8 GB**
-- Vision: 896px, 27-layer SigLIP, 256 image tokens
-- Text: 34 layers, vocab 262K
-
-### Optimized Model (test-s4-res672)
-
-Our pruned model after applying Steps 1-4 of the optimization pipeline:
-
-1. **Vocab pruning**: 262K → 80K tokens (remove unused CJK tokens)
-2. **Vision fc2 quantization**: bf16 → 4-bit (pad intermediate 4304 → 4352 for group_size alignment)
-3. **Text layer pruning**: remove layers 31, 32, 33 (34 → 31 layers)
-4. **Resolution reduction**: 896 → 672 (patches 4096 → 2304, image tokens 256 → 144)
-
-- Disk: **2.5 GB**
-- Vision: 672px, 27-layer SigLIP, 144 image tokens
-- Text: 31 layers, vocab 262K (with token_map to 80K compact embeddings)
-
-### Fully Optimized Model (step7-final-split)
-
-After all 7 optimization steps (adds neuron pruning + weight splitting):
-
-- Disk: **2.0 GB** (language 1.8 GB + vision 231 MB)
-- Text: 31 layers, per-layer MLP pruning (back 17 layers -25% neurons)
-- Text-only runtime: ~2.5 GB (load language_model only)
-- Image runtime: ~2.8 GB (load both)
-
-## Examples
-
-### Text-only inference
+### Download models from HuggingFace
 
 ```bash
-# Original model
-swift run -c release gemma-cli /path/to/gemma-3-4b-it-qat-4bit \
-  --prompt "Hello, how are you?" --max-tokens 100 --temperature 0.0
+# Install huggingface-cli if needed
+pip install huggingface_hub
 
-# Optimized model
-swift run -c release gemma-cli /path/to/gemma-pruned-models/test-s4-res672 \
-  --prompt "Hello, how are you?" --max-tokens 100 --temperature 0.0
+# Download Lite model (2.3 GB, single file)
+huggingface-cli download AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-lite --local-dir models/lite
+
+# Download Mobile model (2.1 GB, split weights)
+huggingface-cli download AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-mobile --local-dir models/mobile
 ```
 
-### Image understanding
+### Examples
 
 ```bash
-# Original model (896px vision)
-swift run -c release gemma-cli /path/to/gemma-3-4b-it-qat-4bit \
-  --image photo.jpg \
-  --prompt "Describe this image in detail." --max-tokens 200 --temperature 0.0
+# Text generation (Mobile model)
+swift run -c release gemma-cli models/mobile \
+  --prompt "Explain quantum computing in simple terms." \
+  --max-tokens 200 --temperature 0.0
 
-# Optimized model (672px vision)
-swift run -c release gemma-cli /path/to/gemma-pruned-models/test-s4-res672 \
+# Image understanding (Mobile model)
+swift run -c release gemma-cli models/mobile \
   --image photo.jpg \
-  --prompt "Describe this image in detail." --max-tokens 200 --temperature 0.0
+  --prompt "Describe this image in detail." \
+  --max-tokens 200 --temperature 0.0
+
+# Original model (for comparison)
+swift run -c release gemma-cli models/original \
+  --prompt "Hello, how are you?" \
+  --max-tokens 100 --temperature 0.0
 ```
 
 ### Output format
 
 ```
-Loading model from: /path/to/model...
+Loading model from: models/mobile...
 Model loaded.
 
 Prompt: Describe this image in detail.
 ------
 [streaming generated text...]
 ------
-Prompt:     271 tokens, 111.85 tokens/s, 2.42s
-Generation: 200 tokens, 89.56 tokens/s, 2.23s
-Peak memory: 5284 MB
+Prompt:     159 tokens, 184.03 tokens/s, 0.86s
+Generation: 200 tokens, 104.15 tokens/s, 1.92s
+Peak memory: 4358 MB
 ```
 
-## Performance Comparison
+## Compression Pipeline
 
-Tested on Apple Silicon with a pizza photo (IMG_3420_small.jpg).
+| Step | Operation | Savings | Key Insight |
+|------|-----------|---------|-------------|
+| 1 | Vocab pruning (262K → 144K tokens) | 170 MB | ASCII vocab scan essential — dictionary-only (80K) breaks generation |
+| 2 | Vision fc2 bf16 → 4-bit (pad 4304 → 4352) | 191 MB | 4304 = 16 x 269 (prime), zero-padding to 4352 is mathematically equivalent |
+| 3 | Remove text layers 31, 32, 33 | 159 MB | Deepest layers most redundant |
+| 4 | Resolution 896 → 672 | runtime | ~3x less vision attention compute; 448px causes token repetition |
+| ~~5~~ | ~~Remove vision layers 12-15~~ | ~~35 MB~~ | ~~Destroys image understanding completely~~ |
+| 6 | MLP neuron pruning (layers 14-30, -25%) | 188 MB | 60-100% dead neurons in deep layers |
+| 7 | Weight splitting (language + vision) | runtime | Text-only: skip loading 231 MB vision weights |
 
-### Text-only (prompt: "Hello, how are you?", max_tokens=50)
+**Total: 2.8 GB → 2.1 GB (25% reduction)**
 
-| Model | Prompt Speed | Generation Speed | Peak Memory |
-|-------|-------------|-----------------|-------------|
-| Original (gemma-3-4b-it-qat-4bit) | 7.3 tokens/s | 97.5 tokens/s | 2,910 MB |
+### Failed Experiments
 
-### Image Understanding (prompt: "Describe this image in detail.", max_tokens=200)
-
-| Model | Prompt Tokens | Prompt Speed | Generation Speed | Peak Memory |
-|-------|--------------|-------------|-----------------|-------------|
-| Original (896px) | 271 | 111.9 tokens/s | 89.6 tokens/s | 5,284 MB |
-| Optimized (672px) | 159 | 89.5 tokens/s | 100.3 tokens/s | 4,699 MB |
-| **Improvement** | **-41%** | — | **+12%** | **-585 MB (-11%)** |
-
-### Key Observations
-
-- **Prompt tokens reduced 41%**: 672px resolution yields 144 image tokens (vs 256 at 896px), directly reducing prompt processing work.
-- **Generation speed improved 12%**: Fewer text layers (31 vs 34) and smaller KV cache accelerate token generation.
-- **Peak memory reduced 585 MB**: Smaller vision activations + fewer parameters.
-- **Image understanding quality preserved**: Both models correctly identify pizza, box, sauce, cheese, and toppings. The 672px model produces slightly less detailed descriptions but no hallucinations or quality collapse.
-- **448px resolution was tested and rejected**: It causes token repetition loops due to insufficient visual information. 672px is the optimal balance point.
-
-## Optimization Pipeline Summary
-
-| Step | Operation | Disk Savings | Status |
-|------|-----------|-------------|--------|
-| 1 | Vocab pruning (262K → 80K) | 261 MB | Done |
-| 2 | Vision fc2 bf16 → 4-bit (pad 4304 → 4352) | 191 MB | Done |
-| 3 | Remove text layers 31, 32, 33 | 159 MB | Done |
-| 4 | Resolution 896 → 672 | ~1 MB disk / runtime savings | Done |
-| ~~5~~ | ~~Remove vision layers 12-15~~ | ~~35 MB~~ | Removed (destroys image quality) |
-| 6 | MLP neuron pruning (back 17 layers -25%) | 188 MB | Done |
-| 7 | Weight splitting (language + vision) | — | Done |
-
-**Total disk reduction: 2.8 GB → 2.0 GB**
+| Experiment | Result |
+|-----------|--------|
+| 448px resolution | Token repetition loops (insufficient visual tokens) |
+| Remove 4 vision layers | Complete hallucination (pizza → "skin texture") |
+| 80K vocabulary (v1) | Generation quality collapse (missing BPE merged tokens) |
 
 ## Project Structure
 
 ```
 gemma-cli/
-  Package.swift           # Swift package manifest
+  Package.swift               # Swift package manifest
   Sources/
-    GemmaCLI.swift        # Main CLI implementation
-  README.md               # This file
+    GemmaCLI.swift            # CLI implementation
+  docs/
+    paper.tex                 # Technical paper (arxiv format)
+  README.md
 ```
 
 ## Dependencies
 
 - [mlx-swift](https://github.com/ml-explore/mlx-swift) (>= 0.30.3) — MLX framework for Apple Silicon
-- [mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) (local) — VLM/LLM model loading and inference
+- [mlx-swift-lm](https://github.com/AtomGradient/mlx-swift-lm) (local, customized fork) — VLM/LLM model loading with pruning support
 - [swift-argument-parser](https://github.com/apple/swift-argument-parser) (>= 1.5.0) — CLI argument parsing
+
+## Citation
+
+```bibtex
+@article{atomgradient2025gemmaprune,
+  title={Gemma-Prune: A Multi-Stage Compression Pipeline for Deploying Gemma 3 4B Vision-Language Model on Mobile Devices},
+  author={AtomGradient},
+  year={2025},
+  url={https://github.com/AtomGradient/swift-gemma-cli}
+}
+```
 
 ## License
 
-This tool is for research and evaluation purposes.
+This tool is for research and evaluation purposes. Model weights are subject to the [Gemma Terms of Use](https://ai.google.dev/gemma/terms).

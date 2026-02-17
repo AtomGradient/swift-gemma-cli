@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemma-Prune: Multi-Stage VLM Compression for Mobile Devices</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body, {delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});"></script>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --bg-card: #161b22;
+            --bg-code: #1c2128;
+            --border: #30363d;
+            --text: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-red: #f85149;
+            --accent-yellow: #d29922;
+            --accent-purple: #bc8cff;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+        }
+        .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+        /* Hero */
+        .hero {
+            padding: 80px 0 60px;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+        }
+        .hero h1 {
+            font-size: 2.8rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #58a6ff, #bc8cff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero .subtitle {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            max-width: 700px;
+            margin: 0 auto 32px;
+        }
+        .hero-stats {
+            display: flex;
+            justify-content: center;
+            gap: 48px;
+            flex-wrap: wrap;
+        }
+        .stat {
+            text-align: center;
+        }
+        .stat .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-green);
+        }
+        .stat .label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* Nav buttons */
+        .nav-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 32px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: #000;
+        }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-outline {
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+        .btn-outline:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* Sections */
+        section {
+            padding: 60px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        section:last-child { border-bottom: none; }
+        h2 {
+            font-size: 1.8rem;
+            margin-bottom: 24px;
+            color: var(--text);
+        }
+        h3 {
+            font-size: 1.2rem;
+            margin: 24px 0 12px;
+            color: var(--accent);
+        }
+        p { margin-bottom: 16px; color: var(--text-secondary); }
+        p strong { color: var(--text); }
+
+        /* Tables */
+        .table-wrapper { overflow-x: auto; margin: 24px 0; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            background: var(--bg-code);
+            color: var(--text);
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        td { color: var(--text-secondary); }
+        tr:hover td { color: var(--text); }
+        .highlight { color: var(--accent-green); font-weight: 600; }
+        .failed { color: var(--accent-red); text-decoration: line-through; opacity: 0.6; }
+
+        /* Pipeline */
+        .pipeline {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin: 24px 0;
+        }
+        .pipeline-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px 20px;
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            transition: border-color 0.2s;
+        }
+        .pipeline-step:hover { border-color: var(--accent); }
+        .pipeline-step.failed-step {
+            opacity: 0.4;
+            border-color: var(--accent-red);
+        }
+        .step-num {
+            flex-shrink: 0;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.85rem;
+        }
+        .step-num.failed-num { background: var(--accent-red); }
+        .step-content h4 {
+            color: var(--text);
+            font-size: 1rem;
+            margin-bottom: 4px;
+        }
+        .step-content p {
+            margin: 0;
+            font-size: 0.85rem;
+        }
+        .step-savings {
+            margin-left: auto;
+            flex-shrink: 0;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: rgba(63, 185, 80, 0.15);
+            color: var(--accent-green);
+        }
+        .step-savings.runtime {
+            background: rgba(88, 166, 255, 0.15);
+            color: var(--accent);
+        }
+
+        /* Code blocks */
+        pre {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px 20px;
+            overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            margin: 16px 0;
+        }
+        code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85em;
+            background: var(--bg-code);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        /* Model cards */
+        .model-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin: 24px 0;
+        }
+        .model-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            transition: border-color 0.2s;
+        }
+        .model-card:hover { border-color: var(--accent); }
+        .model-card .tag {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .tag-lite { background: rgba(88, 166, 255, 0.15); color: var(--accent); }
+        .tag-mobile { background: rgba(63, 185, 80, 0.15); color: var(--accent-green); }
+        .tag-original { background: rgba(139, 148, 158, 0.15); color: var(--text-secondary); }
+        .model-card h4 { font-size: 1.1rem; margin-bottom: 8px; }
+        .model-card .size {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--accent-green);
+            margin-bottom: 12px;
+        }
+        .model-card ul {
+            list-style: none;
+            padding: 0;
+        }
+        .model-card li {
+            padding: 4px 0;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        .model-card li::before {
+            content: ">";
+            color: var(--accent);
+            margin-right: 8px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Math */
+        .math-block {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin: 20px 0;
+            overflow-x: auto;
+            text-align: center;
+        }
+
+        /* Failure callouts */
+        .callout {
+            border-left: 3px solid;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+            background: var(--bg-card);
+        }
+        .callout-red { border-color: var(--accent-red); }
+        .callout-green { border-color: var(--accent-green); }
+        .callout-yellow { border-color: var(--accent-yellow); }
+        .callout h4 { font-size: 0.9rem; margin-bottom: 6px; }
+        .callout p { margin: 0; font-size: 0.85rem; }
+
+        /* Footer */
+        footer {
+            padding: 40px 0;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+        footer a { color: var(--accent); text-decoration: none; }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .hero h1 { font-size: 1.8rem; }
+            .hero-stats { gap: 24px; }
+            .stat .value { font-size: 1.4rem; }
+            .pipeline-step { flex-wrap: wrap; }
+            .step-savings { margin-left: 52px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Hero -->
+<header class="hero">
+    <div class="container">
+        <h1>Gemma-Prune</h1>
+        <p class="subtitle">
+            A multi-stage compression pipeline for deploying Gemma 3 4B Vision-Language Model on Apple Silicon mobile devices via MLX Swift.
+        </p>
+        <div class="hero-stats">
+            <div class="stat">
+                <div class="value">2.8 &rarr; 2.1 GB</div>
+                <div class="label">Model Size (25% smaller)</div>
+            </div>
+            <div class="stat">
+                <div class="value">3.4x</div>
+                <div class="label">Faster Image Processing</div>
+            </div>
+            <div class="stat">
+                <div class="value">23%</div>
+                <div class="label">Less Peak Memory</div>
+            </div>
+            <div class="stat">
+                <div class="value">22%</div>
+                <div class="label">Faster Generation</div>
+            </div>
+        </div>
+        <div class="nav-buttons">
+            <a href="https://github.com/AtomGradient/swift-gemma-cli" class="btn btn-primary">GitHub</a>
+            <a href="https://huggingface.co/AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-mobile" class="btn btn-outline">Mobile Model</a>
+            <a href="https://huggingface.co/AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-lite" class="btn btn-outline">Lite Model</a>
+            <a href="paper.tex" class="btn btn-outline">Paper (LaTeX)</a>
+        </div>
+    </div>
+</header>
+
+<main>
+
+<!-- Abstract -->
+<section>
+    <div class="container">
+        <h2>Abstract</h2>
+        <p>
+            We present <strong>Gemma-Prune</strong>, a multi-stage model compression pipeline that reduces the Gemma 3 4B IT QAT vision-language model from 2.8 GB to 2.1 GB while preserving both text generation and image understanding capabilities. Our approach combines vocabulary pruning (262K&rarr;144K tokens), vision encoder quantization with dimension padding, text layer removal, image resolution reduction (896&rarr;672 pixels), dead neuron pruning, and weight splitting for lazy loading.
+        </p>
+        <p>
+            Deployed on Apple Silicon via MLX Swift, the compressed model achieves <strong>22% faster text generation</strong> (110 vs 90 tokens/s), <strong>3.4x faster image prompt processing</strong> (184 vs 54 tokens/s), and <strong>23% lower peak memory</strong> (2.2 GB vs 2.9 GB for text-only). We identify critical failure modes: vision layer removal destroys image understanding even with only 35 MB savings, while 448px resolution causes token repetition loops. The optimal 672px resolution reduces vision attention compute by ~3x without quality loss.
+        </p>
+    </div>
+</section>
+
+<!-- Models -->
+<section>
+    <div class="container">
+        <h2>Models</h2>
+        <div class="model-cards">
+            <div class="model-card">
+                <span class="tag tag-original">BASELINE</span>
+                <h4>Original</h4>
+                <div class="size" style="color: var(--text-secondary);">2.8 GB</div>
+                <ul>
+                    <li>34 text layers, 262K vocab</li>
+                    <li>896px vision, 256 image tokens</li>
+                    <li>27-layer SigLIP encoder</li>
+                    <li>QAT 4-bit quantized</li>
+                </ul>
+                <a href="https://huggingface.co/mlx-community/gemma-3-4b-it-qat-4bit" class="btn btn-outline" style="margin-top:16px;display:inline-flex;">HuggingFace</a>
+            </div>
+            <div class="model-card">
+                <span class="tag tag-lite">LITE</span>
+                <h4>gemma-3-4b-it-qat-4bit-lite</h4>
+                <div class="size" style="color: var(--accent);">2.3 GB</div>
+                <ul>
+                    <li>31 text layers, 144K compact vocab</li>
+                    <li>672px vision, 144 image tokens</li>
+                    <li>Vision fc2 4-bit quantized</li>
+                    <li>Single-file weights</li>
+                </ul>
+                <a href="https://huggingface.co/AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-lite" class="btn btn-outline" style="margin-top:16px;display:inline-flex;">HuggingFace</a>
+            </div>
+            <div class="model-card">
+                <span class="tag tag-mobile">MOBILE</span>
+                <h4>gemma-3-4b-it-qat-4bit-mobile</h4>
+                <div class="size">2.1 GB</div>
+                <ul>
+                    <li>31 layers, per-layer MLP pruning</li>
+                    <li>Layers 14-30: -25% neurons</li>
+                    <li>Split: 1.9 GB lang + 231 MB vision</li>
+                    <li>Text-only runtime: ~2.2 GB</li>
+                </ul>
+                <a href="https://huggingface.co/AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-mobile" class="btn btn-primary" style="margin-top:16px;display:inline-flex;">HuggingFace</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Pipeline -->
+<section>
+    <div class="container">
+        <h2>Compression Pipeline</h2>
+        <p>Seven sequential stages, each producing a validated checkpoint. Total savings: <strong>709 MB (25%)</strong>.</p>
+
+        <div class="pipeline">
+            <div class="pipeline-step">
+                <div class="step-num">1</div>
+                <div class="step-content">
+                    <h4>Vocabulary Pruning</h4>
+                    <p>262K &rarr; 144K tokens. Remove CJK/Arabic/Cyrillic tokens unused for English. Create <code>token_map</code> for ID remapping.</p>
+                </div>
+                <div class="step-savings">-170 MB</div>
+            </div>
+            <div class="pipeline-step">
+                <div class="step-num">2</div>
+                <div class="step-content">
+                    <h4>Vision fc2 Quantization</h4>
+                    <p>bf16 &rarr; 4-bit for 27 SigLIP layers. Zero-pad intermediate dim 4304 &rarr; 4352 (269 is prime &mdash; can't divide by group_size).</p>
+                </div>
+                <div class="step-savings">-191 MB</div>
+            </div>
+            <div class="pipeline-step">
+                <div class="step-num">3</div>
+                <div class="step-content">
+                    <h4>Text Layer Pruning</h4>
+                    <p>Remove layers 31, 32, 33 from 34-layer transformer. Deepest layers are most redundant.</p>
+                </div>
+                <div class="step-savings">-159 MB</div>
+            </div>
+            <div class="pipeline-step">
+                <div class="step-num">4</div>
+                <div class="step-content">
+                    <h4>Resolution Reduction</h4>
+                    <p>896 &rarr; 672px. Patches 4096 &rarr; 2304. Position embedding bilinear interpolation. ~3x less vision attention compute.</p>
+                </div>
+                <div class="step-savings runtime">runtime</div>
+            </div>
+            <div class="pipeline-step failed-step">
+                <div class="step-num failed-num">5</div>
+                <div class="step-content">
+                    <h4 style="text-decoration:line-through;">Vision Layer Removal</h4>
+                    <p>Removed &mdash; destroys image understanding completely. Pizza misidentified as "skin texture".</p>
+                </div>
+                <div class="step-savings" style="background:rgba(248,81,73,0.15);color:var(--accent-red);">FAILED</div>
+            </div>
+            <div class="pipeline-step">
+                <div class="step-num">6</div>
+                <div class="step-content">
+                    <h4>MLP Neuron Pruning</h4>
+                    <p>Layers 14-30: 60-100% dead neurons. Remove 25% per layer, align to group_size=64. Per-layer intermediate sizes.</p>
+                </div>
+                <div class="step-savings">-188 MB</div>
+            </div>
+            <div class="pipeline-step">
+                <div class="step-num">7</div>
+                <div class="step-content">
+                    <h4>Weight Splitting</h4>
+                    <p>Separate language (1.9 GB) and vision (231 MB). Text-only chat loads only language weights.</p>
+                </div>
+                <div class="step-savings runtime">runtime</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Key Methods -->
+<section>
+    <div class="container">
+        <h2>Key Technical Methods</h2>
+
+        <h3>Vocabulary Pruning with Token Map</h3>
+        <p>The original embedding $\mathbf{E} \in \mathbb{R}^{262208 \times d}$ is compressed to $\mathbf{E}' \in \mathbb{R}^{144257 \times d}$ via a token map $\mathbf{M}$:</p>
+        <div class="math-block">
+            $$\mathbf{h} = \mathbf{E}'[\mathbf{M}[t]], \quad \mathbf{M}[t] = \begin{cases} k & \text{if token } t \text{ is retained (}k\text{-th)} \\ 0 & \text{if token } t \text{ is pruned (zero vector)} \end{cases}$$
+        </div>
+        <div class="callout callout-red">
+            <h4>Critical Finding: BPE Coverage</h4>
+            <p>Dictionary-only pruning (80K tokens) misses BPE-merged subword tokens essential for generation. Adding an ASCII vocabulary scan increased coverage to 144K tokens and resolved all quality issues. <strong>BPE coverage, not dictionary coverage, is the binding constraint.</strong></p>
+        </div>
+
+        <h3>Vision fc2 Dimension Padding</h3>
+        <p>SigLIP's intermediate dimension $4304 = 16 \times 269$ (269 is prime) can't be divided by any MLX group size. Zero-padding to 4352 is mathematically equivalent:</p>
+        <div class="math-block">
+            $$\mathbf{W}'_{\text{fc2}} \cdot \begin{bmatrix} \mathbf{a} \\ \mathbf{0}_{48} \end{bmatrix} = [\mathbf{W}_{\text{fc2}} \mid \mathbf{0}] \cdot \begin{bmatrix} \mathbf{a} \\ \mathbf{0}_{48} \end{bmatrix} = \mathbf{W}_{\text{fc2}} \cdot \mathbf{a}$$
+        </div>
+
+        <h3>Dead Neuron Pruning</h3>
+        <p>Activation profiling over 20 forward passes reveals massive neuron death in deep layers:</p>
+        <div class="math-block">
+            $$\text{Keep neuron } i \text{ in layer } \ell \iff \bar{a}_i^{(\ell)} \geq \tau, \quad d'_\ell = \text{align}_{64}\left(\min\left(|\{i : \bar{a}_i^{(\ell)} \geq \tau\}|,\ 0.75 \cdot d_\ell\right)\right)$$
+        </div>
+        <p>Layers 14-30 have 60-100% dead neurons at threshold $\tau = 0.5$. Each layer's pruned dimension is stored in <code>per_layer_intermediate_sizes</code>.</p>
+
+        <h3>Resolution vs Attention Cost</h3>
+        <p>Vision self-attention scales quadratically with patch count $n$. A 25% linear resolution reduction yields ~68% compute savings:</p>
+        <div class="math-block">
+            $$\text{896px:} \ n = 64^2 = 4096, \quad \mathcal{O}(4096^2 \cdot d) \approx 16.8\text{M} \cdot d$$
+            $$\text{672px:} \ n = 48^2 = 2304, \quad \mathcal{O}(2304^2 \cdot d) \approx 5.3\text{M} \cdot d \quad (\sim\!3.2\times \text{ reduction})$$
+        </div>
+    </div>
+</section>
+
+<!-- Benchmarks -->
+<section>
+    <div class="container">
+        <h2>Benchmarks</h2>
+        <p>Apple Silicon, greedy decoding (<code>temperature=0.0</code>).</p>
+
+        <h3>Text Generation</h3>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr><th>Model</th><th>Disk</th><th>Prompt (t/s)</th><th>Generation (t/s)</th><th>Peak Memory</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Original</td><td>2.8 GB</td><td>109</td><td>90</td><td>2910 MB</td></tr>
+                    <tr><td>Lite (Step 4)</td><td>2.3 GB</td><td>~120</td><td>~110</td><td>~2500 MB</td></tr>
+                    <tr><td><strong>Mobile (Step 7)</strong></td><td><span class="highlight">2.1 GB</span></td><td><span class="highlight">120</span></td><td><span class="highlight">110</span></td><td><span class="highlight">2231 MB</span></td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h3>Image Understanding</h3>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr><th>Model</th><th>Prompt (t/s)</th><th>Generation (t/s)</th><th>Peak Memory</th><th>Quality</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Original (896px)</td><td>54</td><td>27</td><td>~5500 MB</td><td>Excellent</td></tr>
+                    <tr><td>Step 3 (896px)</td><td>73</td><td>61</td><td>4850 MB</td><td>Good</td></tr>
+                    <tr><td><strong>Mobile (672px)</strong></td><td><span class="highlight">184</span></td><td><span class="highlight">104</span></td><td><span class="highlight">4358 MB</span></td><td><span class="highlight">Good</span></td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h3>Failed Experiments</h3>
+        <div class="callout callout-red">
+            <h4>448px Resolution</h4>
+            <p>Token repetition loops &mdash; insufficient visual information causes degenerate cyclic generation.</p>
+        </div>
+        <div class="callout callout-red">
+            <h4>Remove Vision Layers 12-15 (-35 MB)</h4>
+            <p>Complete hallucination &mdash; pizza misidentified as "skin texture". SigLIP encoder has near-zero redundancy.</p>
+        </div>
+        <div class="callout callout-yellow">
+            <h4>80K Vocabulary (v1, dictionary-only)</h4>
+            <p>Generation quality collapse. Missing BPE-merged tokens cause fragmented output. Fixed in v2 with ASCII vocab scan (144K tokens).</p>
+        </div>
+    </div>
+</section>
+
+<!-- Quick Start -->
+<section>
+    <div class="container">
+        <h2>Quick Start</h2>
+
+        <h3>1. Clone</h3>
+        <pre><code>git clone https://github.com/AtomGradient/swift-gemma-cli.git gemma-cli
+git clone https://github.com/AtomGradient/mlx-swift-lm.git mlx-swift-lm</code></pre>
+
+        <h3>2. Download Model</h3>
+        <pre><code>pip install huggingface_hub
+huggingface-cli download AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-mobile --local-dir models/mobile</code></pre>
+
+        <h3>3. Build & Run</h3>
+        <pre><code>cd gemma-cli
+swift build -c release
+
+# Text generation
+swift run -c release gemma-cli models/mobile \
+  --prompt "Explain quantum computing." --max-tokens 200 --temperature 0.0
+
+# Image understanding
+swift run -c release gemma-cli models/mobile \
+  --image photo.jpg \
+  --prompt "Describe this image in detail." --max-tokens 200</code></pre>
+    </div>
+</section>
+
+<!-- Citation -->
+<section>
+    <div class="container">
+        <h2>Citation</h2>
+        <pre><code>@article{atomgradient2025gemmaprune,
+  title={Gemma-Prune: A Multi-Stage Compression Pipeline for Deploying
+         Gemma 3 4B Vision-Language Model on Mobile Devices},
+  author={AtomGradient},
+  year={2025},
+  url={https://github.com/AtomGradient/swift-gemma-cli}
+}</code></pre>
+    </div>
+</section>
+
+</main>
+
+<footer>
+    <div class="container">
+        <p>
+            <a href="https://github.com/AtomGradient/swift-gemma-cli">GitHub</a> &middot;
+            <a href="https://huggingface.co/AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-mobile">HuggingFace (Mobile)</a> &middot;
+            <a href="https://huggingface.co/AtomGradientOpenSource/gemma-3-4b-it-qat-4bit-lite">HuggingFace (Lite)</a>
+        </p>
+        <p style="margin-top:8px;">Model weights subject to <a href="https://ai.google.dev/gemma/terms">Gemma Terms of Use</a>.</p>
+    </div>
+</footer>
+
+</body>
+</html>
