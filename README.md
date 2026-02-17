@@ -4,6 +4,8 @@ A multi-stage compression pipeline and Swift CLI for deploying **Gemma 3 4B IT V
 
 We compress the original 2.8 GB QAT 4-bit model to **2.1 GB** while preserving both text generation and image understanding — achieving **22% faster generation**, **3.4x faster image processing**, and **23% lower memory**.
 
+> **Project Page**: [https://atomgradient.github.io/swift-gemma-cli](https://atomgradient.github.io/swift-gemma-cli/)
+>
 > **Paper**: [Gemma-Prune: A Multi-Stage Compression Pipeline for Deploying Gemma 3 4B VLM on Mobile Devices](docs/paper.tex)
 
 ## Models
