@@ -6,7 +6,7 @@ We compress the original 2.8 GB QAT 4-bit model to **2.1 GB** while preserving b
 
 > **Project Page**: [https://atomgradient.github.io/swift-gemma-cli](https://atomgradient.github.io/swift-gemma-cli/)
 >
-> **Paper**: [Gemma-Prune: A Multi-Stage Compression Pipeline for Deploying Gemma 3 4B VLM on Mobile Devices](https://atomgradient.github.io/swift-gemma-cli/paper.pdf)
+> **Paper**: [Gemma-Prune: A Multi-Stage Compression Pipeline for Deploying Gemma 3 4B VLM on Mobile Devices](swift-gemma-cli)
 
 ## Models
 
@@ -208,10 +208,10 @@ gemma-cli/
 ## Citation
 
 ```bibtex
-@article{atomgradient2025gemmaprune,
+@article{atomgradient2026gemmaprune,
   title={Gemma-Prune: A Multi-Stage Compression Pipeline for Deploying Gemma 3 4B Vision-Language Model on Mobile Devices},
   author={AtomGradient},
-  year={2025},
+  year={2026},
   url={https://github.com/AtomGradient/swift-gemma-cli}
 }
 ```
